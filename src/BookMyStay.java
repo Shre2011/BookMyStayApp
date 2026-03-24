@@ -1,14 +1,18 @@
 import java.util.*;
 
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
+    }
+}
+
 class Reservation {
     private String guestName;
     private String roomType;
-    private String reservationId;
 
-    public Reservation(String guestName, String roomType, String reservationId) {
+    public Reservation(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
-        this.reservationId = reservationId;
     }
 
     public String getGuestName() {
@@ -18,52 +22,70 @@ class Reservation {
     public String getRoomType() {
         return roomType;
     }
+}
 
-    public String getReservationId() {
-        return reservationId;
+class RoomInventory {
+    private HashMap<String, Integer> inventory;
+
+    public RoomInventory() {
+        inventory = new HashMap<>();
+        inventory.put("Single Room", 2);
+        inventory.put("Double Room", 1);
+        inventory.put("Suite Room", 0);
     }
 
-    public void display() {
-        System.out.println("ID: " + reservationId + " | Guest: " + guestName + " | Room: " + roomType);
+    public boolean isValidRoomType(String type) {
+        return inventory.containsKey(type);
+    }
+
+    public int getAvailability(String type) {
+        return inventory.getOrDefault(type, 0);
+    }
+
+    public void reduceAvailability(String type) throws InvalidBookingException {
+        int current = inventory.getOrDefault(type, 0);
+
+        if (current <= 0) {
+            throw new InvalidBookingException("No rooms available for " + type);
+        }
+
+        inventory.put(type, current - 1);
     }
 }
 
-class BookingHistory {
-    private List<Reservation> history;
+class BookingService {
+    private RoomInventory inventory;
 
-    public BookingHistory() {
-        history = new ArrayList<>();
+    public BookingService(RoomInventory inventory) {
+        this.inventory = inventory;
     }
 
-    public void addReservation(Reservation r) {
-        history.add(r);
-    }
+    public void processReservation(Reservation r) {
+        try {
+            validate(r);
 
-    public List<Reservation> getAllReservations() {
-        return history;
-    }
-}
+            inventory.reduceAvailability(r.getRoomType());
 
-class BookingReportService {
+            System.out.println("Booking Confirmed for " + r.getGuestName() +
+                    " | Room: " + r.getRoomType());
 
-    public void displayAllBookings(List<Reservation> history) {
-        System.out.println("\nBooking History:");
-        for (Reservation r : history) {
-            r.display();
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking Failed: " + e.getMessage());
         }
     }
 
-    public void generateSummary(List<Reservation> history) {
-        HashMap<String, Integer> countMap = new HashMap<>();
+    private void validate(Reservation r) throws InvalidBookingException {
 
-        for (Reservation r : history) {
-            String type = r.getRoomType();
-            countMap.put(type, countMap.getOrDefault(type, 0) + 1);
+        if (r.getGuestName() == null || r.getGuestName().isEmpty()) {
+            throw new InvalidBookingException("Guest name cannot be empty");
         }
 
-        System.out.println("\nBooking Summary Report:");
-        for (String type : countMap.keySet()) {
-            System.out.println(type + " booked: " + countMap.get(type));
+        if (!inventory.isValidRoomType(r.getRoomType())) {
+            throw new InvalidBookingException("Invalid room type: " + r.getRoomType());
+        }
+
+        if (inventory.getAvailability(r.getRoomType()) <= 0) {
+            throw new InvalidBookingException("Room not available: " + r.getRoomType());
         }
     }
 }
@@ -71,18 +93,17 @@ class BookingReportService {
 public class BookMyStay {
     public static void main(String[] args) {
 
-        BookingHistory history = new BookingHistory();
-        BookingReportService reportService = new BookingReportService();
+        RoomInventory inventory = new RoomInventory();
+        BookingService service = new BookingService(inventory);
 
-        Reservation r1 = new Reservation("Alice", "Single Room", "SR101");
-        Reservation r2 = new Reservation("Bob", "Double Room", "DR102");
-        Reservation r3 = new Reservation("Charlie", "Single Room", "SR103");
+        Reservation r1 = new Reservation("Alice", "Single Room");
+        Reservation r2 = new Reservation("", "Double Room");
+        Reservation r3 = new Reservation("Charlie", "Suite Room");
+        Reservation r4 = new Reservation("David", "Luxury Room");
 
-        history.addReservation(r1);
-        history.addReservation(r2);
-        history.addReservation(r3);
-
-        reportService.displayAllBookings(history.getAllReservations());
-        reportService.generateSummary(history.getAllReservations());
+        service.processReservation(r1);
+        service.processReservation(r2);
+        service.processReservation(r3);
+        service.processReservation(r4);
     }
 }
