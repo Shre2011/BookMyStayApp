@@ -1,18 +1,12 @@
 import java.util.*;
 
 class Reservation {
-    private String reservationId;
     private String guestName;
     private String roomType;
 
-    public Reservation(String reservationId, String guestName, String roomType) {
-        this.reservationId = reservationId;
+    public Reservation(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
-    }
-
-    public String getReservationId() {
-        return reservationId;
     }
 
     public String getGuestName() {
@@ -24,105 +18,111 @@ class Reservation {
     }
 }
 
+class BookingQueue {
+    private Queue<Reservation> queue = new LinkedList<>();
+
+    public synchronized void addRequest(Reservation r) {
+        queue.add(r);
+    }
+
+    public synchronized Reservation getRequest() {
+        return queue.poll();
+    }
+
+    public synchronized boolean isEmpty() {
+        return queue.isEmpty();
+    }
+}
+
 class RoomInventory {
-    private HashMap<String, Integer> inventory;
+    private HashMap<String, Integer> inventory = new HashMap<>();
 
     public RoomInventory() {
-        inventory = new HashMap<>();
-        inventory.put("Single Room", 1);
+        inventory.put("Single Room", 2);
         inventory.put("Double Room", 1);
     }
 
-    public int getAvailability(String type) {
-        return inventory.getOrDefault(type, 0);
+    public synchronized boolean allocateRoom(String type) {
+        int available = inventory.getOrDefault(type, 0);
+
+        if (available > 0) {
+            inventory.put(type, available - 1);
+            return true;
+        }
+        return false;
     }
 
-    public void reduce(String type) {
-        inventory.put(type, inventory.get(type) - 1);
-    }
-
-    public void increase(String type) {
-        inventory.put(type, inventory.get(type) + 1);
-    }
-
-    public void display() {
+    public synchronized void display() {
         System.out.println("Inventory: " + inventory);
     }
 }
 
-class BookingService {
+class BookingProcessor extends Thread {
+    private BookingQueue queue;
     private RoomInventory inventory;
-    private HashMap<String, String> reservationToRoomId;
-    private HashMap<String, String> reservationToType;
-    private Stack<String> rollbackStack;
 
-    public BookingService(RoomInventory inventory) {
+    public BookingProcessor(BookingQueue queue, RoomInventory inventory) {
+        this.queue = queue;
         this.inventory = inventory;
-        this.reservationToRoomId = new HashMap<>();
-        this.reservationToType = new HashMap<>();
-        this.rollbackStack = new Stack<>();
     }
 
-    public void confirmBooking(Reservation r) {
+    public void run() {
+        while (true) {
+            Reservation r;
 
-        if (inventory.getAvailability(r.getRoomType()) <= 0) {
-            System.out.println("Booking Failed for " + r.getGuestName());
-            return;
+            synchronized (queue) {
+                if (queue.isEmpty()) break;
+                r = queue.getRequest();
+            }
+
+            if (r != null) {
+                boolean success;
+
+                synchronized (inventory) {
+                    success = inventory.allocateRoom(r.getRoomType());
+                }
+
+                if (success) {
+                    System.out.println(Thread.currentThread().getName() +
+                            " booked for " + r.getGuestName() +
+                            " (" + r.getRoomType() + ")");
+                } else {
+                    System.out.println(Thread.currentThread().getName() +
+                            " failed for " + r.getGuestName());
+                }
+            }
         }
-
-        String roomId = UUID.randomUUID().toString().substring(0, 5);
-
-        reservationToRoomId.put(r.getReservationId(), roomId);
-        reservationToType.put(r.getReservationId(), r.getRoomType());
-
-        inventory.reduce(r.getRoomType());
-
-        System.out.println("Booking Confirmed: " + r.getReservationId() +
-                " | RoomID: " + roomId);
-    }
-
-    public void cancelBooking(String reservationId) {
-
-        if (!reservationToRoomId.containsKey(reservationId)) {
-            System.out.println("Cancellation Failed: Invalid reservation ID");
-            return;
-        }
-
-        String roomId = reservationToRoomId.get(reservationId);
-        String type = reservationToType.get(reservationId);
-
-        rollbackStack.push(roomId);
-
-        inventory.increase(type);
-
-        reservationToRoomId.remove(reservationId);
-        reservationToType.remove(reservationId);
-
-        System.out.println("Booking Cancelled: " + reservationId +
-                " | RoomID released: " + roomId);
-    }
-
-    public void displayRollbackStack() {
-        System.out.println("Rollback Stack: " + rollbackStack);
     }
 }
 
 public class BookMyStay {
     public static void main(String[] args) {
 
+        BookingQueue queue = new BookingQueue();
         RoomInventory inventory = new RoomInventory();
-        BookingService service = new BookingService(inventory);
 
-        Reservation r1 = new Reservation("R101", "Alice", "Single Room");
+        queue.addRequest(new Reservation("Alice", "Single Room"));
+        queue.addRequest(new Reservation("Bob", "Single Room"));
+        queue.addRequest(new Reservation("Charlie", "Single Room"));
+        queue.addRequest(new Reservation("David", "Double Room"));
 
-        service.confirmBooking(r1);
+        Thread t1 = new BookingProcessor(queue, inventory);
+        Thread t2 = new BookingProcessor(queue, inventory);
+
+        t1.setName("Thread-1");
+        t2.setName("Thread-2");
+
+        t1.start();
+        t2.start();
+
+        try {
+            t1.join();
+            t2.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("\nFinal Inventory:");
         inventory.display();
-
-        System.out.println("\nCancelling Booking...\n");
-
-        service.cancelBooking("R101");
-
-        inventory.display();
-        service.displayRollbackStack();
     }
 }
