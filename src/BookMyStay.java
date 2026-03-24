@@ -1,3 +1,5 @@
+import java.util.HashMap;
+
 abstract class Room {
     private int beds;
     private double price;
@@ -46,6 +48,32 @@ class SuiteRoom extends Room {
     }
 }
 
+class RoomInventory {
+    private HashMap<String, Integer> inventory;
+
+    public RoomInventory() {
+        inventory = new HashMap<>();
+        inventory.put("Single Room", 5);
+        inventory.put("Double Room", 3);
+        inventory.put("Suite Room", 2);
+    }
+
+    public int getAvailability(String roomType) {
+        return inventory.getOrDefault(roomType, 0);
+    }
+
+    public void updateAvailability(String roomType, int count) {
+        inventory.put(roomType, count);
+    }
+
+    public void displayInventory() {
+        System.out.println("Current Room Inventory:");
+        for (String type : inventory.keySet()) {
+            System.out.println(type + " -> " + inventory.get(type));
+        }
+    }
+}
+
 public class BookMyStay {
     public static void main(String[] args) {
 
@@ -53,21 +81,28 @@ public class BookMyStay {
         Room doubleroom = new DoubleRoom();
         Room suite = new SuiteRoom();
 
-        int singleAvailability = 5;
-        int doubleAvailability = 3;
-        int suiteAvailability = 2;
+        RoomInventory inventory = new RoomInventory();
 
         System.out.println("Welcome to Book My Stay App\n");
 
         single.displayDetails();
-        System.out.println("Available: " + singleAvailability + "\n");
+        System.out.println("Available: " + inventory.getAvailability(single.getType()) + "\n");
 
         doubleroom.displayDetails();
-        System.out.println("Available: " + doubleAvailability + "\n");
+        System.out.println("Available: " + inventory.getAvailability(doubleroom.getType()) + "\n");
 
         suite.displayDetails();
-        System.out.println("Available: " + suiteAvailability + "\n");
+        System.out.println("Available: " + inventory.getAvailability(suite.getType()) + "\n");
 
-        System.out.println("Application Finished.");
+        inventory.displayInventory();
+
+        System.out.println("\nUpdating availability...\n");
+
+        inventory.updateAvailability("Single Room", 4);
+        inventory.updateAvailability("Suite Room", 1);
+
+        inventory.displayInventory();
+
+        System.out.println("\nApplication Finished.");
     }
 }
